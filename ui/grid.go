@@ -21,12 +21,17 @@ import (
 	"github.com/yesetoda/cs1gobot/robot"
 )
 
+// GridEditMode selects how pointer interaction modifies the world grid.
 type GridEditMode int
 
 const (
+	// GridEditNone disables grid editing.
 	GridEditNone GridEditMode = iota
+	// GridEditBeeper adds or removes beepers on clicked cells.
 	GridEditBeeper
+	// GridEditWallEast toggles the east wall of the clicked cell.
 	GridEditWallEast
+	// GridEditWallNorth toggles the north wall of the clicked cell.
 	GridEditWallNorth
 )
 
@@ -43,12 +48,16 @@ var robotAssetResourceCache sync.Map
 var generatedRobotResourceCache sync.Map
 var baseDirectionalImageCache sync.Map
 
+// GridEditModeOptions returns the human-readable labels shown in the UI for
+// each supported edit mode.
 func GridEditModeOptions() []string {
 	res := make([]string, len(gridEditModeLabels))
 	copy(res, gridEditModeLabels)
 	return res
 }
 
+// GridEditModeFromLabel converts a UI label returned by GridEditModeOptions
+// back into its corresponding edit mode value.
 func GridEditModeFromLabel(label string) GridEditMode {
 	switch label {
 	case gridEditModeLabels[1]:
@@ -62,6 +71,8 @@ func GridEditModeFromLabel(label string) GridEditMode {
 	}
 }
 
+// RobotGrid is the interactive Fyne widget that renders the current world,
+// robots, traces, walls, and beepers.
 type RobotGrid struct {
 	widget.BaseWidget
 
@@ -70,18 +81,23 @@ type RobotGrid struct {
 	fastMode bool
 }
 
+// NewRobotGrid creates a grid widget configured with beeper editing enabled
+// and fast rendering mode on.
 func NewRobotGrid() *RobotGrid {
 	g := &RobotGrid{editMode: GridEditBeeper, fastMode: true}
 	g.ExtendBaseWidget(g)
 	return g
 }
 
+// SetEditMode changes how clicks on the grid modify the world.
 func (g *RobotGrid) SetEditMode(mode GridEditMode) {
 	g.mu.Lock()
 	g.editMode = mode
 	g.mu.Unlock()
 }
 
+// SetFastMode enables or disables simplified rendering intended for smoother
+// updates during busy animation.
 func (g *RobotGrid) SetFastMode(on bool) {
 	g.mu.Lock()
 	g.fastMode = on
@@ -158,14 +174,17 @@ func (g *RobotGrid) editAt(pos fyne.Position, secondary bool) {
 	RequestGridRefresh()
 }
 
+// Tapped handles primary-button clicks on the grid.
 func (g *RobotGrid) Tapped(ev *fyne.PointEvent) {
 	g.editAt(ev.Position, false)
 }
 
+// TappedSecondary handles secondary-button clicks on the grid.
 func (g *RobotGrid) TappedSecondary(ev *fyne.PointEvent) {
 	g.editAt(ev.Position, true)
 }
 
+// CreateRenderer implements fyne.Widget.
 func (g *RobotGrid) CreateRenderer() fyne.WidgetRenderer {
 	return &gridRenderer{grid: g}
 }

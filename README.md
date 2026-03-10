@@ -20,6 +20,30 @@ It combines a visual world, an in-app code editor, and a Yaegi-powered interpret
 
 Reference: the project uses `fyne.io/fyne/v2` for the UI and `github.com/traefik/yaegi` for runtime code execution.
 
+## Linux Setup
+
+Because this project uses Fyne for a desktop GUI, some Linux systems need extra native development packages before `go run .` or `go build ./...` will work.
+
+### Fedora
+
+If you are on Fedora, install the required packages with:
+
+```bash
+sudo dnf install golang gcc libX11-devel libXcursor-devel libXrandr-devel libXinerama-devel libXi-devel libXxf86vm-devel mesa-libGL-devel
+```
+
+If Go is already installed on your machine, you can omit `golang` and keep the remaining packages.
+
+### Other Linux distributions
+
+Package names vary by distro, but you will usually need the equivalents of:
+
+- Go
+- GCC
+- X11 development headers
+- `libXcursor`, `libXrandr`, `libXinerama`, `libXi`, and `libXxf86vm` development packages
+- Mesa/OpenGL development packages
+
 ## Quick Start
 
 From the repository root:
@@ -144,7 +168,7 @@ For full API reference, world format details, debugger behavior, architecture no
 
 - If a robot appears stuck, check whether `Step mode` is enabled.
 - If execution fails with a robot error, inspect walls/borders and beeper conditions.
-- If the GUI does not start on Linux, verify Fyne platform dependencies are installed.
+- If the GUI does not start on Linux, verify the Fyne platform dependencies above are installed first. On Fedora, use the `dnf` command in `Linux Setup`.
 
 ## Notes For Git Publishing
 

@@ -23,6 +23,20 @@ From the repository root:
 go run .
 ```
 
+### Linux prerequisites
+
+This project uses Fyne, so Linux users may need native GUI development packages before the app will build or launch.
+
+If you are on Fedora, install them with:
+
+```bash
+sudo dnf install golang gcc libX11-devel libXcursor-devel libXrandr-devel libXinerama-devel libXi-devel libXxf86vm-devel mesa-libGL-devel
+```
+
+If Go is already installed, you can omit `golang` and keep the rest of the command.
+
+If you are on another Linux distribution, install the distro-equivalent packages for Go, GCC, X11 development headers, and Mesa/OpenGL development libraries.
+
 Main surfaces:
 
 - Left: rendered world grid.
@@ -118,6 +132,18 @@ The following API is exposed to interpreted code through the Yaegi symbol table.
 | `FacingNorth()` | Sensor: robot currently faces north. |
 | `GetState()` | Returns `(x, y, dir, color)`. |
 | `GetTrace()` | Returns copy of trace points. |
+
+### Viewing GoDoc locally
+
+The public packages now include GoDoc comments intended for learners.
+You can inspect them locally with:
+
+```bash
+go doc github.com/yesetoda/cs1gobot/robot
+go doc -all github.com/yesetoda/cs1gobot/robot
+go doc github.com/yesetoda/cs1gobot/demos
+go doc github.com/yesetoda/cs1gobot/engine
+```
 
 ## 5. UI Controls In Detail
 
@@ -259,7 +285,13 @@ Bundled examples are in `worlds/`:
 
 ### GUI does not open on Linux
 
-Install Fyne runtime prerequisites for your distro (OpenGL/windowing libs), then rerun `go run .`.
+Install the Fyne GUI prerequisites for your distro, then rerun `go run .`.
+
+On Fedora, use:
+
+```bash
+sudo dnf install golang gcc libX11-devel libXcursor-devel libXrandr-devel libXinerama-devel libXi-devel libXxf86vm-devel mesa-libGL-devel
+```
 
 ### Robot does not move
 

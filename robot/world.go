@@ -2,6 +2,8 @@ package robot
 
 import "sync"
 
+// Point identifies one cell in the world grid using 1-based avenue/street
+// coordinates.
 type Point struct {
 	// X is the avenue index in the world, starting at 1 from the left.
 	X int
@@ -11,7 +13,9 @@ type Point struct {
 
 // Wall represents a blocking wall between two adjacent points.
 type Wall struct {
+	// P1 is one endpoint of the wall segment.
 	P1 Point
+	// P2 is the other endpoint of the wall segment.
 	P2 Point
 }
 
@@ -22,6 +26,10 @@ func normalizeWall(p1, p2 Point) Wall {
 	return Wall{P1: p2, P2: p1}
 }
 
+// World stores the geometry and beeper layout for one robot world.
+//
+// A world is a bounded grid of avenues and streets containing optional wall
+// segments between adjacent cells and zero or more beeper piles on cells.
 type World struct {
 	mu sync.Mutex
 	// Avenues is the width of the world (horizontal axis, 1..Avenues).
@@ -48,6 +56,7 @@ func adjacent(p1, p2 Point) bool {
 	return dx+dy == 1
 }
 
+// NewWorld creates an empty world with the provided width and height.
 func NewWorld(avenues, streets int) *World {
 	return &World{
 		Avenues: avenues,
@@ -57,6 +66,7 @@ func NewWorld(avenues, streets int) *World {
 	}
 }
 
+// SetUpdateFunc sets the callback triggered after visible world changes.
 func (w *World) SetUpdateFunc(f func()) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -76,6 +86,8 @@ func (w *World) inBoundsLocked(p Point) bool {
 	return p.X >= 1 && p.X <= w.Avenues && p.Y >= 1 && p.Y <= w.Streets
 }
 
+// AddWall adds a blocking wall between two adjacent in-bounds cells.
+// Invalid or out-of-bounds requests are ignored.
 func (w *World) AddWall(p1, p2 Point) {
 	w.mu.Lock()
 	if !adjacent(p1, p2) || !w.inBoundsLocked(p1) || !w.inBoundsLocked(p2) {
@@ -90,6 +102,8 @@ func (w *World) AddWall(p1, p2 Point) {
 	}
 }
 
+// RemoveWall removes a wall between two adjacent in-bounds cells.
+// Invalid or out-of-bounds requests are ignored.
 func (w *World) RemoveWall(p1, p2 Point) {
 	w.mu.Lock()
 	if !adjacent(p1, p2) || !w.inBoundsLocked(p1) || !w.inBoundsLocked(p2) {
@@ -104,6 +118,7 @@ func (w *World) RemoveWall(p1, p2 Point) {
 	}
 }
 
+// HasWall reports whether a wall exists between two adjacent cells.
 func (w *World) HasWall(p1, p2 Point) bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -113,6 +128,8 @@ func (w *World) HasWall(p1, p2 Point) bool {
 	return w.Walls[normalizeWall(p1, p2)]
 }
 
+// ToggleWall adds or removes a wall between two adjacent in-bounds cells.
+// Invalid or out-of-bounds requests are ignored.
 func (w *World) ToggleWall(p1, p2 Point) {
 	w.mu.Lock()
 	if !adjacent(p1, p2) || !w.inBoundsLocked(p1) || !w.inBoundsLocked(p2) {
@@ -132,6 +149,8 @@ func (w *World) ToggleWall(p1, p2 Point) {
 	}
 }
 
+// IsClear reports whether moving one step from p in the supplied direction is
+// possible without hitting a wall or leaving the world.
 func (w *World) IsClear(p Point, dir Point) bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -147,6 +166,7 @@ func (w *World) IsClear(p Point, dir Point) bool {
 	return true
 }
 
+// AddBeeper adds one beeper to the given cell if it is inside the world.
 func (w *World) AddBeeper(x, y int) {
 	w.mu.Lock()
 	p := Point{X: x, Y: y}
@@ -162,6 +182,7 @@ func (w *World) AddBeeper(x, y int) {
 	}
 }
 
+// RemoveBeeper removes one beeper from the given cell if present.
 func (w *World) RemoveBeeper(x, y int) {
 	w.mu.Lock()
 	p := Point{X: x, Y: y}
@@ -184,24 +205,28 @@ func (w *World) RemoveBeeper(x, y int) {
 	w.mu.Unlock()
 }
 
+// OnBeeper reports whether the given cell currently contains any beepers.
 func (w *World) OnBeeper(x, y int) bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return w.Beepers[Point{X: x, Y: y}] > 0
 }
 
+// BeeperCount returns the number of beepers on the given cell.
 func (w *World) BeeperCount(x, y int) int {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return w.Beepers[Point{X: x, Y: y}]
 }
 
+// GetAvenuesAndStreets returns the world dimensions as avenues, streets.
 func (w *World) GetAvenuesAndStreets() (int, int) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return w.Avenues, w.Streets
 }
 
+// GetSnapshot returns defensive copies of the world's walls and beeper maps.
 func (w *World) GetSnapshot() (map[Wall]bool, map[Point]int) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -217,6 +242,7 @@ func (w *World) GetSnapshot() (map[Wall]bool, map[Point]int) {
 	return wallsCopy, beepersCopy
 }
 
+// Clone returns a deep copy of the world geometry and beeper state.
 func (w *World) Clone() *World {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -231,10 +257,16 @@ func (w *World) Clone() *World {
 	return nw
 }
 
-// Global state
+// CurrentWorld is the globally active world used by newly created robots.
 var CurrentWorld *World
+
+// UpdateUI is the app-level callback used to request a redraw when the world
+// or robot state changes.
 var UpdateUI func()
 
+// CreateWorld replaces CurrentWorld with a new empty world.
+//
+// A zero avenue or street count falls back to a default size of 10.
 func CreateWorld(avenues, streets int) {
 	if avenues == 0 {
 		avenues = 10

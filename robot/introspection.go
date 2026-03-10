@@ -6,11 +6,18 @@ import (
 	"strings"
 )
 
+// RobotState is a lightweight snapshot of a robot suitable for diagnostics,
+// inspectors, and interpreted helper output.
 type RobotState struct {
-	X           int
-	Y           int
-	Direction   int
-	Color       string
+	// X is the current avenue of the robot.
+	X int
+	// Y is the current street of the robot.
+	Y int
+	// Direction is the robot's current facing direction.
+	Direction int
+	// Color is the robot's configured display colour.
+	Color string
+	// TracePoints is the number of recorded points in the robot's trace path.
 	TracePoints int
 }
 

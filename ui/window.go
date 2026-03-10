@@ -18,11 +18,15 @@ import (
 	"github.com/yesetoda/cs1gobot/robot"
 )
 
+// DemoAction describes one demo button shown in the UI.
 type DemoAction struct {
+	// Label is the text displayed on the button.
 	Label string
-	Run   func()
+	// Run is the callback executed when the demo is launched.
+	Run func()
 }
 
+// GlobalGrid is the shared grid instance used by the main application window.
 var GlobalGrid *RobotGrid
 var refreshRequested atomic.Bool
 var refreshQueued atomic.Bool
@@ -233,6 +237,8 @@ func discoverPrebuiltWorlds() ([]string, map[string]string) {
 	return labels, paths
 }
 
+// MakeEditorUI builds the editor panel used for learner code entry and
+// optional execution.
 func MakeEditorUI(initialCode string, onRun func(code string)) fyne.CanvasObject {
 	editor := widget.NewMultiLineEntry()
 	editor.Text = initialCode
@@ -251,6 +257,11 @@ func MakeEditorUI(initialCode string, onRun func(code string)) fyne.CanvasObject
 	return editorContainer
 }
 
+// MakeWindowContent assembles the main split-view UI used by the desktop app.
+//
+// The returned content includes the rendered grid, inspector panels, debugger
+// controls, world editing tools, demo buttons, and a code editor. If onRun is
+// nil, the editor remains visible but the run button is disabled.
 func MakeWindowContent(parent fyne.Window, initialCode string, onRun func(code string), demoActions ...DemoAction) fyne.CanvasObject {
 	GlobalGrid = NewRobotGrid()
 	startForcedFrameLoop()

@@ -6,11 +6,15 @@ import (
 	"github.com/yesetoda/cs1gobot/robot"
 )
 
+// Action describes one named demo entry that can be launched from the UI.
 type Action struct {
+	// Label is the user-visible name of the demo.
 	Label string
-	Run   func()
+	// Run starts the demo when invoked.
+	Run func()
 }
 
+// Actions returns the demos exposed by the application UI.
 func Actions() []Action {
 	return []Action{
 		{Label: "Square", Run: StartSquareDemo},
@@ -21,6 +25,7 @@ func Actions() []Action {
 	}
 }
 
+// StartSquareDemo launches a simple square-walking demonstration.
 func StartSquareDemo() {
 	robot.CreateWorld(10, 10)
 	robot.SetStop(false)
@@ -42,6 +47,7 @@ func runSquareDemo() {
 	}
 }
 
+// StartHurdlesDemo launches a demo that jumps over a row of small hurdles.
 func StartHurdlesDemo() {
 	robot.CreateWorld(14, 6)
 	for _, x := range []int{3, 6, 9, 12} {
@@ -77,6 +83,8 @@ func jumpSmallHurdle(hubo *robot.Robot) {
 	hubo.TurnLeft()
 }
 
+// StartHarvestDemo launches a demo that collects beepers, returns home, and
+// drops them back into the world.
 func StartHarvestDemo() {
 	robot.CreateWorld(10, 6)
 	for x := 2; x <= 8; x++ {
@@ -119,6 +127,7 @@ func runHarvestDemo() {
 	}
 }
 
+// StartMazeDemo launches a fixed-path maze traversal demonstration.
 func StartMazeDemo() {
 	robot.CreateWorld(10, 8)
 	addMazeWalls()
@@ -174,6 +183,8 @@ func runMazeDemo() {
 	}
 }
 
+// StartGoroutineRaceDemo launches multiple robots concurrently to demonstrate
+// goroutine-based motion in separate lanes.
 func StartGoroutineRaceDemo() {
 	robot.CreateWorld(14, 8)
 	for x := 1; x < 14; x++ {

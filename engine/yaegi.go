@@ -61,6 +61,10 @@ var robotSymbolTable = map[string]reflect.Value{
 	"East":                 reflect.ValueOf(robot.East),
 }
 
+// RobotSymbols exposes the robot package API to the Yaegi interpreter.
+//
+// Callers typically pass this value to interp.Use so interpreted source can
+// import and use the robot package like compiled Go code.
 var RobotSymbols = func() interp.Exports {
 	// Yaegi exports are keyed as "import/path/packageName" (for example
 	// "fmt/fmt" in stdlib). Register both short import style and the actual

@@ -10,9 +10,13 @@ import (
 type Direction int
 
 const (
+	// North faces toward increasing street numbers.
 	North Direction = iota
+	// West faces toward decreasing avenue numbers.
 	West
+	// South faces toward decreasing street numbers.
 	South
+	// East faces toward increasing avenue numbers.
 	East
 )
 
@@ -25,6 +29,9 @@ var Directions = []Point{
 	{X: 1, Y: 0},  // E (dir 3)
 }
 
+// StopExecution is the global stop flag checked before and after robot
+// actions. External code should usually use SetStop and IsStopped instead of
+// writing to this variable directly.
 var StopExecution bool
 var stopMu sync.Mutex
 
@@ -50,14 +57,23 @@ var MaxTracePoints = 120
 
 const minAnimationFrame = 16 * time.Millisecond
 
+// StepDebugState is a snapshot of the current debugger stepping state.
 type StepDebugState struct {
-	Enabled    bool
-	Waiting    bool
-	Pending    int
-	Steps      uint64
+	// Enabled reports whether step mode is active.
+	Enabled bool
+	// Waiting reports whether execution is currently paused for a step token.
+	Waiting bool
+	// Pending is the number of queued StepOnce permits.
+	Pending int
+	// Steps is the number of visible robot actions executed since the last reset.
+	Steps uint64
+	// LastAction is the name of the most recent visible robot action.
 	LastAction string
 }
 
+// SetStop enables or clears the global stop flag used by running robot code.
+// When stop is true, any waiting step-mode action is released so execution can
+// terminate promptly.
 func SetStop(stop bool) {
 	stopMu.Lock()
 	StopExecution = stop
@@ -71,6 +87,7 @@ func SetStop(stop bool) {
 	}
 }
 
+// IsStopped reports whether the global stop flag is currently set.
 func IsStopped() bool {
 	stopMu.Lock()
 	defer stopMu.Unlock()
@@ -189,8 +206,11 @@ type Robot struct {
 	world *World
 }
 
-// Global list for rendering
+// Registry contains all currently active robots in the world.
 var Registry []*Robot
+
+// RegistryMu protects Registry while snapshots are taken for rendering or
+// introspection.
 var RegistryMu sync.Mutex
 
 // New creates a new robot at avenue 1, street 1, initially facing East in
@@ -253,6 +273,8 @@ func NewAt(av, st int, dir Direction, color string) *Robot {
 	return r
 }
 
+// SetPause sets the delay between visible actions for this robot in
+// milliseconds.
 func (r *Robot) SetPause(delayMs int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -282,7 +304,11 @@ func SetMaxTracePoints(max int) {
 	MaxTracePoints = max
 }
 
-// SetTrace enables path tracing (e.g color string ignored for simple trace path)
+// SetTrace enables or disables path tracing for this robot.
+//
+// Any non-empty string enables tracing. The string is currently treated as a
+// semantic colour hint used by the rest of the app rather than a strict trace
+// renderer parameter.
 func (r *Robot) SetTrace(enabled string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -295,12 +321,14 @@ func (r *Robot) SetTrace(enabled string) {
 	r.TracePath = nil
 }
 
+// GetState returns the robot's current avenue, street, direction, and colour.
 func (r *Robot) GetState() (int, int, int, string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.X, r.Y, r.Dir, r.Color
 }
 
+// GetTrace returns a copy of the robot's recorded trace path.
 func (r *Robot) GetTrace() []Point {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -342,6 +370,10 @@ func (r *Robot) notifyAndPause(action string) {
 	r.checkStop()
 }
 
+// Move advances the robot forward by one cell.
+//
+// Move panics with a RobotError message if the path ahead is blocked by a wall
+// or the world boundary.
 func (r *Robot) Move() {
 	r.beforeAction()
 	r.mu.Lock()
@@ -364,6 +396,7 @@ func (r *Robot) Move() {
 	r.notifyAndPause("Move")
 }
 
+// TurnLeft rotates the robot 90 degrees counter-clockwise.
 func (r *Robot) TurnLeft() {
 	r.beforeAction()
 	r.mu.Lock()
@@ -381,6 +414,11 @@ func (r *Robot) TurnRight() {
 	r.notifyAndPause("TurnRight")
 }
 
+// PickBeeper removes one beeper from the robot's current cell and places it in
+// the robot's bag.
+//
+// PickBeeper panics with a RobotError message if the robot is not standing on a
+// beeper.
 func (r *Robot) PickBeeper() {
 	r.beforeAction()
 	r.mu.Lock()
@@ -402,6 +440,10 @@ func (r *Robot) PickBeeper() {
 	r.notifyAndPause("PickBeeper")
 }
 
+// DropBeeper places one beeper from the robot's bag onto the current cell.
+//
+// DropBeeper panics with a RobotError message if the robot is not carrying any
+// beepers.
 func (r *Robot) DropBeeper() {
 	r.beforeAction()
 	r.mu.Lock()
@@ -500,7 +542,8 @@ func (r *Robot) OnBeeper() bool {
 	return r.world.OnBeeper(r.X, r.Y)
 }
 
-// Reset clears all registered robots before a fresh script run
+// Reset removes all registered robots and clears step-debugger counters.
+// It is typically called before starting a new script or demo run.
 func Reset() {
 	RegistryMu.Lock()
 	Registry = nil
