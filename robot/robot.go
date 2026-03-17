@@ -241,6 +241,7 @@ func New(opts ...interface{}) *Robot {
 	if r.world != nil {
 		r.world.notify() // Trigger a redraw to place the robot
 	}
+	recordRobotSpawn(r)
 
 	if DefaultTraceColor != "" {
 		r.SetTrace(DefaultTraceColor)
@@ -267,6 +268,7 @@ func NewAt(av, st int, dir Direction, color string) *Robot {
 	if r.world != nil {
 		r.world.notify()
 	}
+	recordRobotSpawn(r)
 	if DefaultTraceColor != "" {
 		r.SetTrace(DefaultTraceColor)
 	}
@@ -343,13 +345,20 @@ func (r *Robot) checkStop() {
 	}
 }
 
-func (r *Robot) beforeAction() {
+func (r *Robot) beforeAction(action string) {
 	r.checkStop()
+	if err := checkRunConstraintsNext(action); err != nil {
+		panic(err)
+	}
 	waitForStepPermit()
 	r.checkStop()
+	if err := checkRunConstraintsNext(action); err != nil {
+		panic(err)
+	}
 }
 
 func (r *Robot) notifyAndPause(action string) {
+	recordRunAction(action, r)
 	recordStepAction(action)
 	r.checkStop()
 	if r.world != nil {
@@ -375,7 +384,7 @@ func (r *Robot) notifyAndPause(action string) {
 // Move panics with a RobotError message if the path ahead is blocked by a wall
 // or the world boundary.
 func (r *Robot) Move() {
-	r.beforeAction()
+	r.beforeAction("Move")
 	r.mu.Lock()
 	dir := Directions[r.Dir]
 	if r.world == nil || !r.world.IsClear(Point{X: r.X, Y: r.Y}, dir) {
@@ -398,7 +407,7 @@ func (r *Robot) Move() {
 
 // TurnLeft rotates the robot 90 degrees counter-clockwise.
 func (r *Robot) TurnLeft() {
-	r.beforeAction()
+	r.beforeAction("TurnLeft")
 	r.mu.Lock()
 	r.Dir = (r.Dir + 1) % 4
 	r.mu.Unlock()
@@ -407,7 +416,7 @@ func (r *Robot) TurnLeft() {
 
 // TurnRight turns the robot 90 degrees to the right.
 func (r *Robot) TurnRight() {
-	r.beforeAction()
+	r.beforeAction("TurnRight")
 	r.mu.Lock()
 	r.Dir = (r.Dir + 3) % 4
 	r.mu.Unlock()
@@ -420,7 +429,7 @@ func (r *Robot) TurnRight() {
 // PickBeeper panics with a RobotError message if the robot is not standing on a
 // beeper.
 func (r *Robot) PickBeeper() {
-	r.beforeAction()
+	r.beforeAction("PickBeeper")
 	r.mu.Lock()
 	if r.world == nil {
 		r.mu.Unlock()
@@ -445,7 +454,7 @@ func (r *Robot) PickBeeper() {
 // DropBeeper panics with a RobotError message if the robot is not carrying any
 // beepers.
 func (r *Robot) DropBeeper() {
-	r.beforeAction()
+	r.beforeAction("DropBeeper")
 	r.mu.Lock()
 	if r.BeeperBag <= 0 {
 		r.mu.Unlock()
@@ -549,4 +558,5 @@ func Reset() {
 	Registry = nil
 	RegistryMu.Unlock()
 	ResetStepperState()
+	ResetRunTracking()
 }

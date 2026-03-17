@@ -5,12 +5,12 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/storage"
@@ -32,6 +32,42 @@ var refreshRequested atomic.Bool
 var refreshQueued atomic.Bool
 var forceFrameLoopStarted atomic.Bool
 var frameRefreshInFlight atomic.Bool
+var goalFeedbackLabel *widget.Label
+
+var goalLabelToType = map[string]robot.GoalType{
+	"None":                       robot.GoalNone,
+	"Collect all beepers":        robot.GoalCollectAllBeepers,
+	"Collect at least N beepers": robot.GoalCollectAtLeastBeepers,
+	"Visit all cells":            robot.GoalVisitAllCells,
+	"Visit at least N cells":     robot.GoalVisitAtLeastCells,
+}
+
+func parseNonNegativeInt(s string) int {
+	v, err := strconv.Atoi(strings.TrimSpace(s))
+	if err != nil || v < 0 {
+		return 0
+	}
+	return v
+}
+
+func goalTypeFromLabel(label string) robot.GoalType {
+	if t, ok := goalLabelToType[label]; ok {
+		return t
+	}
+	return robot.GoalNone
+}
+
+// SetGoalFeedback updates the shared goal feedback label if present.
+func SetGoalFeedback(text string) {
+	if fyne.CurrentApp() == nil {
+		return
+	}
+	fyne.Do(func() {
+		if goalFeedbackLabel != nil {
+			goalFeedbackLabel.SetText(text)
+		}
+	})
+}
 
 func startForcedFrameLoop() {
 	if !forceFrameLoopStarted.CompareAndSwap(false, true) {
@@ -52,7 +88,7 @@ func startForcedFrameLoop() {
 
 			fyne.Do(func() {
 				if GlobalGrid != nil {
-					canvas.Refresh(GlobalGrid)
+					GlobalGrid.Refresh()
 				}
 				frameRefreshInFlight.Store(false)
 			})
@@ -68,7 +104,6 @@ func queueRefresh() {
 	fyne.Do(func() {
 		if GlobalGrid != nil && refreshRequested.Swap(false) {
 			GlobalGrid.Refresh()
-			canvas.Refresh(GlobalGrid)
 		} else {
 			refreshRequested.Store(false)
 		}
@@ -281,6 +316,7 @@ func MakeWindowContent(parent fyne.Window, initialCode string, onRun func(code s
 		}
 		robot.UpdateUI = func() {
 			RequestGridRefresh()
+			worldInfoDirty.Store(true)
 		}
 		robot.CurrentWorld.SetUpdateFunc(func() {
 			if robot.UpdateUI != nil {
@@ -292,7 +328,7 @@ func MakeWindowContent(parent fyne.Window, initialCode string, onRun func(code s
 	}
 
 	go func() {
-		ticker := time.NewTicker(350 * time.Millisecond)
+		ticker := time.NewTicker(120 * time.Millisecond)
 		defer ticker.Stop()
 
 		for range ticker.C {
@@ -320,7 +356,14 @@ func MakeWindowContent(parent fyne.Window, initialCode string, onRun func(code s
 
 	attachWorld()
 
-	editorUI := MakeEditorUI(initialCode, onRun)
+	applyRunPolicy := func() {}
+	runWithPolicy := func(code string) {
+		applyRunPolicy()
+		SetGoalFeedback("Running...")
+		if onRun != nil {
+			onRun(code)
+		}
+	}
 
 	// --- Interactive controls on the editor side ---
 
@@ -478,6 +521,61 @@ func MakeWindowContent(parent fyne.Window, initialCode string, onRun func(code s
 	})
 	traceCheck.SetChecked(robot.DefaultTraceColor != "")
 
+	maxMovesEntry := widget.NewEntry()
+	maxMovesEntry.SetPlaceHolder("0 = unlimited")
+	maxActionsEntry := widget.NewEntry()
+	maxActionsEntry.SetPlaceHolder("0 = unlimited")
+	maxTurnsEntry := widget.NewEntry()
+	maxTurnsEntry.SetPlaceHolder("0 = unlimited")
+	maxPicksEntry := widget.NewEntry()
+	maxPicksEntry.SetPlaceHolder("0 = unlimited")
+	timeLimitEntry := widget.NewEntry()
+	timeLimitEntry.SetPlaceHolder("ms, 0 = unlimited")
+
+	goalTargetEntry := widget.NewEntry()
+	goalTargetEntry.SetPlaceHolder("target N")
+	goalTargetEntry.Disable()
+
+	goalLabels := []string{"None", "Collect all beepers", "Collect at least N beepers", "Visit all cells", "Visit at least N cells"}
+	goalSelect := widget.NewSelect(goalLabels, func(label string) {
+		t := goalTypeFromLabel(label)
+		switch t {
+		case robot.GoalCollectAtLeastBeepers, robot.GoalVisitAtLeastCells:
+			goalTargetEntry.Enable()
+		default:
+			goalTargetEntry.Disable()
+		}
+	})
+	goalSelect.SetSelected("None")
+
+	goalResult := widget.NewLabel("Goal feedback will appear here after each run.")
+	goalResult.TextStyle.Monospace = true
+	goalResult.Wrapping = fyne.TextWrapWord
+	goalFeedbackLabel = goalResult
+
+	apiHelp := widget.NewLabel("Script helpers:\n- state := robot.CurrentWorldState()\n- state.Walls, state.Beepers, state.RobotStates\n- robot.SetConstraints(robot.Constraints{MaxMoves: 80, TimeLimitMs: 5000})\n- robot.SetGoal(robot.Goal{Type: robot.GoalCollectAllBeepers})\n- robot.CurrentRunStats(), robot.EvaluateGoal()")
+	apiHelp.Wrapping = fyne.TextWrapWord
+
+	applyRunPolicy = func() {
+		robot.SetConstraints(robot.Constraints{
+			MaxMoves:    parseNonNegativeInt(maxMovesEntry.Text),
+			MaxActions:  parseNonNegativeInt(maxActionsEntry.Text),
+			MaxTurns:    parseNonNegativeInt(maxTurnsEntry.Text),
+			MaxPicks:    parseNonNegativeInt(maxPicksEntry.Text),
+			TimeLimitMs: parseNonNegativeInt(timeLimitEntry.Text),
+		})
+
+		robot.SetGoal(robot.Goal{
+			Type:   goalTypeFromLabel(goalSelect.Selected),
+			Target: parseNonNegativeInt(goalTargetEntry.Text),
+		})
+	}
+
+	applyPolicyBtn := widget.NewButton("Apply policy now", func() {
+		applyRunPolicy()
+		SetGoalFeedback("Constraints and goal applied for next run.")
+	})
+
 	stepModeCheck := widget.NewCheck("Step mode (pause each action)", func(on bool) {
 		robot.SetStepMode(on)
 	})
@@ -563,9 +661,35 @@ func MakeWindowContent(parent fyne.Window, initialCode string, onRun func(code s
 		clearWorldBtn,
 	)
 
+	goalResultScroll := container.NewVScroll(goalResult)
+	goalResultScroll.SetMinSize(fyne.NewSize(260, 130))
+
+	constraintsBox := container.NewVBox(
+		widget.NewLabel("Max moves"),
+		maxMovesEntry,
+		widget.NewLabel("Max actions"),
+		maxActionsEntry,
+		widget.NewLabel("Max turns"),
+		maxTurnsEntry,
+		widget.NewLabel("Max beeper picks"),
+		maxPicksEntry,
+		widget.NewLabel("Time limit (ms)"),
+		timeLimitEntry,
+		widget.NewSeparator(),
+		widget.NewLabel("Goal"),
+		goalSelect,
+		goalTargetEntry,
+		applyPolicyBtn,
+		goalResultScroll,
+		apiHelp,
+	)
+
+	editorUI := MakeEditorUI(initialCode, runWithPolicy)
+
 	accordionItems := []*widget.AccordionItem{
 		widget.NewAccordionItem("World Setup", worldSetupBox),
 		widget.NewAccordionItem("Simulation", simulationBox),
+		widget.NewAccordionItem("Goals & Constraints", constraintsBox),
 		widget.NewAccordionItem("Debugger", debuggerBox),
 		widget.NewAccordionItem("Grid Edit", gridEditBox),
 		widget.NewAccordionItem("World Details", worldInfoScroll),
