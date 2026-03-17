@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"strings"
 	"time"
 
 	"fyne.io/fyne/v2/app"
@@ -45,13 +46,44 @@ func main() {
 		time.Sleep(50 * time.Millisecond)
 		robot.SetStop(false)
 		robot.Reset()
+		robot.BeginRun()
+		ui.SetGoalFeedback("Running...")
 		ui.RequestGridRefresh()
 		go func() {
 			err := engine.RunCode(code)
-			if err != nil && err.Error() != "Execution stopped by user" {
-				log.Println("Error executing code:", err)
-				dialog.ShowError(err, w)
+			if err != nil {
+				if robot.IsConstraintReachedError(err) {
+					eval := robot.EvaluateGoal()
+					msg := eval.Message
+					if eval.Details != "" {
+						msg += "\n" + eval.Details
+					}
+					constraintText := strings.TrimSpace(strings.TrimPrefix(err.Error(), "ConstraintReached:"))
+					if constraintText != "" {
+						msg += "\nConstraint: " + constraintText
+					}
+					ui.SetGoalFeedback(msg)
+					dialog.ShowInformation("Constraint reached", msg, w)
+					return
+				}
+
+				if err.Error() != "Execution stopped by user" {
+					log.Println("Error executing code:", err)
+					ui.SetGoalFeedback("Run error: " + err.Error())
+					dialog.ShowError(err, w)
+					return
+				}
+
+				ui.SetGoalFeedback("Execution stopped by user.")
+				return
 			}
+
+			eval := robot.EvaluateGoal()
+			msg := eval.Message
+			if eval.Details != "" {
+				msg += "\n" + eval.Details
+			}
+			ui.SetGoalFeedback(msg)
 		}()
 	}, actions...)
 	w.SetContent(content)

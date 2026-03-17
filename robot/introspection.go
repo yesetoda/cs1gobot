@@ -21,6 +21,18 @@ type RobotState struct {
 	TracePoints int
 }
 
+// WorldState is a script-friendly world snapshot used from interpreted code.
+type WorldState struct {
+	Avenues      int
+	Streets      int
+	Walls        map[Wall]bool
+	Beepers      map[Point]int
+	BeeperTotal  int
+	RobotStates  []RobotState
+	VisitedCells int
+	WorldCells   int
+}
+
 // WorldDimensions returns the current world size as avenues, streets.
 func WorldDimensions() (int, int) {
 	if CurrentWorld == nil {
@@ -92,6 +104,45 @@ func WorldRobotStates() []RobotState {
 		r.mu.Unlock()
 	}
 	return states
+}
+
+// CurrentWorldState returns a structured snapshot that scripts can inspect,
+// for example `state := robot.CurrentWorldState(); state.Walls`.
+func CurrentWorldState() WorldState {
+	if CurrentWorld == nil {
+		return WorldState{}
+	}
+
+	av, st := CurrentWorld.GetAvenuesAndStreets()
+	walls, beepers := CurrentWorld.GetSnapshot()
+	run := CurrentRunStats()
+
+	return WorldState{
+		Avenues:      av,
+		Streets:      st,
+		Walls:        walls,
+		Beepers:      beepers,
+		BeeperTotal:  WorldBeeperTotal(),
+		RobotStates:  WorldRobotStates(),
+		VisitedCells: run.VisitedCells,
+		WorldCells:   run.WorldCells,
+	}
+}
+
+// RunStatsSnapshot returns the latest action/run metrics.
+func RunStatsSnapshot() RunStats {
+	return CurrentRunStats()
+}
+
+// GoalEvaluationSnapshot evaluates the current goal against run metrics.
+func GoalEvaluationSnapshot() GoalEvaluation {
+	return EvaluateGoal()
+}
+
+// CurrentWorldRef returns the currently active world pointer.
+// Scripts can inspect exported fields such as world.Walls and world.Beepers.
+func CurrentWorldRef() *World {
+	return CurrentWorld
 }
 
 // WorldDetails returns a text summary useful for debugging from scripts.
